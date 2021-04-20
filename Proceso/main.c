@@ -1,9 +1,9 @@
 /* DMUTEX (2009) Sistemas Operativos Distribuidos
- * Código de Apoyo
+ * Codigo de Apoyo
  *
- * ESTE CÓDIGO DEBE COMPLETARLO EL ALUMNO:
+ * ESTE CODIGO DEBE COMPLETARLO EL ALUMNO:
  *    - Para desarrollar las funciones de mensajes, reloj y
- *      gestión del bucle de tareas se recomienda la implementación
+ *      gestion del bucle de tareas se recomienda la implementacion
  *      de las mismas en diferentes ficheros.
  */
 
@@ -11,45 +11,78 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
 int puerto_udp;
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
-  int port;
-  char line[80],proc[80];
+	int port, sck;
+	socklen_t len;
+	char line[80], proc[80];
+	struct sockaddr_in addr;
 
-  if(argc<2)
-  {
-    fprintf(stderr,"Uso: proceso <ID>\n");
-    return 1;
-  }
+	if (argc < 2)
+	{
+		fprintf(stderr, "Uso: proceso <ID>\n");
+		return 1;
+	}
 
-  /* Establece el modo buffer de entrada/salida a línea */
-  setvbuf(stdout,(char*)malloc(sizeof(char)*80),_IOLBF,80);
-  setvbuf(stdin,(char*)malloc(sizeof(char)*80),_IOLBF,80);
+	/* Establece el modo buffer de entrada/salida a lï¿½nea */
+	setvbuf(stdout, (char *)malloc(sizeof(char) * 80), _IOLBF, 80);
+	setvbuf(stdin, (char *)malloc(sizeof(char) * 80), _IOLBF, 80);
 
-  puerto_udp=1111; /* Se determina el puerto UDP que corresponda.
-                      Dicho puerto debe estar libre y quedará
+	puerto_udp = 1111; /* Se determina el puerto UDP que corresponda.
+                      Dicho puerto debe estar libre y quedara
                       reservado por dicho proceso. */
 
-  fprintf(stdout,"%s: %d\n",argv[1],puerto_udp);
+	/*Preparamos socket*/
+	if ((sck = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+	{
+		perror("Error");
+		return 1;
+	}
 
-  for(;fgets(line,80,stdin);)
-  {
-    if(!strcmp(line,"START\n"))
-      break;
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = INADDR_ANY;
+	/*Para que decida el sistema el puerto, se deja a 0*/
+	addr.sin_port = 0;
 
-    sscanf(line,"%[^:]: %d",proc,&port);
-    /* Habra que guardarlo en algun sitio */
+	len = sizeof(addr);
 
-    if(!strcmp(proc,argv[1]))
-    { /* Este proceso soy yo */ }
-  }
+	// realizamos bind con el socket
+	if (bind(sck, (const struct sockaddr *)&addr, len) < 0)
+	{
+		perror("bind fallido");
+		return 1;
+	}
 
-  /* Inicializar Reloj */
+	/*cogemos el puerto del proceso*/
+	getsockname(sck, (struct sockaddr *)&addr, &len);
+	puerto_udp = addr.sin_port;
 
-  /* Procesar Acciones */
+	fprintf(stdout, "%s: %d\n", argv[1], puerto_udp);
 
-  return 0;
+	for (; fgets(line, 80, stdin);)
+	{
+		if (!strcmp(line, "START\n"))
+			break;
+
+		sscanf(line, "%[^:]: %d", proc, &port);
+		/* Habra que guardarlo en algun sitio */
+
+		if (!strcmp(proc, argv[1]))
+		{ /* Este proceso soy yo */
+		}
+	}
+
+	/* Inicializar Reloj */
+
+	/* Procesar Acciones */
+
+	return 0;
 }
