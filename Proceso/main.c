@@ -19,12 +19,83 @@
 
 int puerto_udp;
 
+/*struct para guardar informacion de un proceso*/
+struct proceso
+{
+	char nombre[80];
+	int puerto;
+};
+
+/*lista para guardar procesos*/
+struct nodo
+{
+	struct proceso proc;
+	struct nodo *next;
+};
+
+struct lista
+{
+	struct nodo *inicio;
+	struct nodo *final;
+	int length;
+} lista;
+
+/*función que devuelve en p, el proceso de la lista*/
+/*que coincida con el nombre dado*/
+struct proceso getProceso(char *nombre)
+{
+
+	int found = -1;
+	struct nodo *nodoActual;
+	struct proceso res;
+	nodoActual = lista.inicio;
+
+	while (nodoActual != NULL && found == -1)
+	{
+		/*se comparan los nombres*/
+		if (strcmp(nombre, nodoActual->proc.nombre) == 0)
+		{
+			found = 0;
+			res = nodoActual->proc;
+			continue;
+		}
+		/*si no se ha encontrado, sigue con el siguiente*/
+		nodoActual = nodoActual->next;
+	}
+	if (found != 0)
+		return res;
+	else
+		return res;
+}
+
+int addProceso(struct proceso *p)
+{
+	struct nodo *n;
+	n = malloc(sizeof(struct nodo));
+	n->proc = *p;
+
+	if (lista.length == 0)
+	{
+		lista.inicio = n;
+		lista.final = n;
+	}
+	else
+	{
+		lista.final->next = n;
+		lista.final = n;
+	}
+
+	lista.length = lista.length + 1;
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	int port, sck;
 	socklen_t len;
 	char line[80], proc[80];
 	struct sockaddr_in addr;
+	struct proceso *p, a;
 
 	if (argc < 2)
 	{
@@ -36,10 +107,6 @@ int main(int argc, char *argv[])
 	setvbuf(stdout, (char *)malloc(sizeof(char) * 80), _IOLBF, 80);
 	setvbuf(stdin, (char *)malloc(sizeof(char) * 80), _IOLBF, 80);
 
-	puerto_udp = 1111; /* Se determina el puerto UDP que corresponda.
-                      Dicho puerto debe estar libre y quedara
-                      reservado por dicho proceso. */
-
 	/*Preparamos socket*/
 	if ((sck = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
@@ -47,6 +114,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+	/*Preparamos sockaddr_in*/
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = INADDR_ANY;
 	/*Para que decida el sistema el puerto, se deja a 0*/
@@ -75,10 +143,23 @@ int main(int argc, char *argv[])
 		sscanf(line, "%[^:]: %d", proc, &port);
 		/* Habra que guardarlo en algun sitio */
 
+		/*guardamos memoria para el proceso*/
+		p = malloc(sizeof(struct proceso));
+		strcpy(p->nombre, proc);
+		p->puerto = port;
+
+		/*lo añadimos a la lista*/
+		addProceso(p);
 		if (!strcmp(proc, argv[1]))
 		{ /* Este proceso soy yo */
 		}
 	}
+
+	a = getProceso("A");
+	printf("%s\n", a.nombre);
+	a = getProceso("B");
+	printf("%s\n", a.nombre);
+
 
 	/* Inicializar Reloj */
 
