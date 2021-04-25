@@ -9,6 +9,7 @@ struct proceso
 {
 	char nombre[80];
 	int puerto;
+	int id;
 };
 
 /*struct de la estructura de datos*/

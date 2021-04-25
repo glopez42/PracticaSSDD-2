@@ -17,17 +17,18 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include "lista.h"
+#include "controladorLC.h"
 
 int puerto_udp;
 
 int main(int argc, char *argv[])
 {
-	int port, sck;
-	int * logicClock;
+	int port, sck, id, procesoActual;
+	int *logicClock;
 	socklen_t len;
 	char line[80], proc[80];
 	struct sockaddr_in addr;
-	struct proceso *p, a;
+	struct proceso *p;
 
 	if (argc < 2)
 	{
@@ -67,6 +68,7 @@ int main(int argc, char *argv[])
 
 	fprintf(stdout, "%s: %d\n", argv[1], puerto_udp);
 
+	id = 1;
 	for (; fgets(line, 80, stdin);)
 	{
 		if (!strcmp(line, "START\n"))
@@ -78,13 +80,18 @@ int main(int argc, char *argv[])
 		p = malloc(sizeof(struct proceso));
 		strcpy(p->nombre, proc);
 		p->puerto = port;
+		p->id = id;
 
 		/*se guarda en la lista*/
 		addProceso(p);
 
 		if (!strcmp(proc, argv[1]))
 		{ /* Este proceso soy yo */
+			procesoActual = id;
 		}
+
+		/*se actualiza el nº de id*/
+		id = id + 1;
 	}
 
 	/* Inicializar Reloj, un elemento por cada proceso de la lista */
@@ -93,9 +100,23 @@ int main(int argc, char *argv[])
 	/* Procesar Acciones */
 	while (fgets(line, 80, stdin))
 	{
-		
+		if (strcmp(line, "EVENT\n") == 0)
+		{
+			printf("os\n");
+			event(logicClock, procesoActual);
+			fprintf(stdout, "%s: TICK\n", argv[1]);
+			continue;
+		}
+
+		if (strcmp(line, "GETCLOCK\n") == 0)
+		{
+			fprintf(stdout, "%s: ", argv[1]);
+			printLC(logicClock, lista.length);
+			continue;
+		}
+
+
 	}
-	
 
 	return 0;
 }
