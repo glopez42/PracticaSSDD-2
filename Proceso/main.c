@@ -102,7 +102,6 @@ int main(int argc, char *argv[])
 	{
 		if (strcmp(line, "EVENT\n") == 0)
 		{
-			printf("os\n");
 			event(logicClock, procesoActual);
 			fprintf(stdout, "%s: TICK\n", argv[1]);
 			continue;
