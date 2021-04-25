@@ -8,7 +8,7 @@
 /*operación que aumenta el contador de una posición del reloj*/
 int event(int *logicClock, int pos)
 {
-    logicClock[pos] = logicClock[pos] + 1;
+    logicClock[pos-1] = logicClock[pos-1] + 1;
     return 0;
 }
 
@@ -28,21 +28,21 @@ int combineLC(int *lc1, int *lc2, int length, int j)
         }
     }
     /*esta operación conlleva un evento, por lo que hay que actualizar el componente j*/
-    event(lc1, j);
+    return event(lc1, j);
 }
 
 /*operación que devuelve 0 si lcProceso1 es anterior a lcProceso2, 1 en caso contrario*/
 int esAnterior(int *lcProceso1, int *lcProceso2, int id1, int id2, int length)
 {
     int i, totalIguales, anterior;
-    for ( i = 0; i < length; i++)
+    for (i = 0; i < length; i++)
     {
         /*si un componente es mayor, el proceso2 será anterior*/
         if (lcProceso1[i] > lcProceso2[i])
         {
             return 1;
         }
-        
+
         /*si los componentes son iguales se suma el contador*/
         if (lcProceso1[i] == lcProceso2[i])
         {
@@ -53,28 +53,44 @@ int esAnterior(int *lcProceso1, int *lcProceso2, int id1, int id2, int length)
     /*si todos los componentes son iguales, el anterior será el de identificador menor*/
     if (totalIguales == length)
     {
-        anterior = (id1 < id2)? 0 : 1;
+        anterior = (id1 < id2) ? 0 : 1;
         return anterior;
-        
     }
-    
+
     /*si llega hasta aquí, el proceso1 es anterior*/
     return 0;
 }
 
-/*operación que imprime un reloj lógico*/
-void printLC(int * logicClock, int length) {
-    int i;
-    fprintf(stdout, "LC[");
+
+/*operación que devuelve en buff el reloj lógico en formato String*/
+void toString(int *logicClock, int length, char *buff)
+{
+    int i, j = 3;
+    buff[0] = 'L';
+    buff[1] = 'C';
+    buff[2] = '[';
     for (i = 0; i < length; i++)
     {
-        fprintf(stdout, "%d", logicClock[i]);
+        buff[j] = logicClock[i] + '0';
+        j = j + 1;
         if (i < length - 1)
         {
-            fprintf(stdout, ",");
-        } 
+            buff[j] = ',';
+            j = j + 1;
+        }
     }
 
-    fprintf(stdout, "]\n");
-    
+    buff[j] = ']';
+    j = j + 1;
+    buff[j] = '\0';
 }
+
+
+/*operación que imprime un reloj lógico*/
+void printLC(int *logicClock, int length)
+{
+    char buff[80];
+    toString(logicClock, length, buff);
+    fprintf(stdout, "%s\n", buff);
+}
+

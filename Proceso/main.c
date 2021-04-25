@@ -21,12 +21,18 @@
 
 int puerto_udp;
 
+int enviar(){
+
+return 0;
+}
+
+
 int main(int argc, char *argv[])
 {
 	int port, sck, id, procesoActual;
 	int *logicClock;
 	socklen_t len;
-	char line[80], proc[80];
+	char line[80], proc[80], buff[80], aux[80];
 	struct sockaddr_in addr;
 	struct proceso *p;
 
@@ -36,7 +42,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	/* Establece el modo buffer de entrada/salida a l�nea */
+	/* Establece el modo buffer de entrada/salida a linea */
 	setvbuf(stdout, (char *)malloc(sizeof(char) * 80), _IOLBF, 80);
 	setvbuf(stdin, (char *)malloc(sizeof(char) * 80), _IOLBF, 80);
 
@@ -102,8 +108,8 @@ int main(int argc, char *argv[])
 	{
 		if (strcmp(line, "EVENT\n") == 0)
 		{
-			event(logicClock, procesoActual);
 			fprintf(stdout, "%s: TICK\n", argv[1]);
+			event(logicClock, procesoActual);
 			continue;
 		}
 
@@ -113,6 +119,26 @@ int main(int argc, char *argv[])
 			printLC(logicClock, lista.length);
 			continue;
 		}
+
+		if (strcmp(line, "RECEIVE\n") == 0)
+		{
+			
+			continue;
+		}
+
+		sscanf(line, "%s %s", aux,proc);
+
+		if (strcmp(aux, "MESSAGETO") == 0)
+		{
+			/*se genera un evento*/
+			fprintf(stdout, "%s: TICK\n", argv[1]);
+			event(logicClock, procesoActual);
+			toString(logicClock,lista.length, buff);
+			fprintf(stdout, "SEND(MSG,%d)\n", proc);
+			continue;
+		}
+
+
 
 
 	}
