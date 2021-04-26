@@ -62,3 +62,19 @@ int addProceso(struct proceso *p)
 	lista.length = lista.length + 1;
 	return 0;
 }
+
+/*función que libera la memoria usada por una lista*/
+void freeLista()
+{
+	struct nodo *nodoActual;
+	struct nodo *nodoSiguiente;
+	nodoActual = lista.inicio;
+
+	while (nodoActual != NULL)
+	{
+		nodoSiguiente = nodoActual->next;
+		free(nodoActual);
+		nodoActual = nodoSiguiente;
+	}
+
+}

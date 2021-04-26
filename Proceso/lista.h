@@ -27,5 +27,8 @@ struct proceso getProceso(char *nombre);
 /*función que añade un proceso a la lista*/
 int addProceso(struct proceso *p);
 
+/*función que libera la memoria usada por una lista*/
+void freeLista();
+
 
 #endif

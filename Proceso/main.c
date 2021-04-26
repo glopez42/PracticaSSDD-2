@@ -19,22 +19,47 @@
 #include "lista.h"
 #include "controladorLC.h"
 
-int puerto_udp;
+int puerto_udp, socket_udp;
 
-int enviar(){
+struct mensaje
+{
+	int tipo; /*MSG = 0, LOCK = 1, OK = 2*/
+	char buff[80];
+	char emisor[80];
+};
 
-return 0;
+/*función auxiliar para mandar mensajes udp a un proceso*/
+int enviar(char *destName, struct mensaje *m)
+{
+	struct proceso p;
+	struct sockaddr_in addr_env;
+	addr_env.sin_family = AF_INET;
+	addr_env.sin_addr.s_addr = INADDR_ANY;
+
+	/*obtenemos el puerto destino*/
+	p = getProceso(destName);
+	addr_env.sin_port = p.puerto;
+
+	/*mandamos el mensaje*/
+	if (sendto(socket_udp, m, sizeof(struct mensaje), 0, (struct sockaddr *)&addr_env, sizeof(addr_env)) < 0)
+	{
+		printf("Error en el sendto\n");
+		close(socket_udp);
+		return -1;
+	}
+
+	return 0;
 }
-
 
 int main(int argc, char *argv[])
 {
-	int port, sck, id, procesoActual;
+	int port, id, procesoActual;
 	int *logicClock;
 	socklen_t len;
-	char line[80], proc[80], buff[80], aux[80];
+	char line[80], proc[80], aux[80], tipo[5];
 	struct sockaddr_in addr;
 	struct proceso *p;
+	struct mensaje msj, respuesta;
 
 	if (argc < 2)
 	{
@@ -47,7 +72,7 @@ int main(int argc, char *argv[])
 	setvbuf(stdin, (char *)malloc(sizeof(char) * 80), _IOLBF, 80);
 
 	/*Preparamos socket*/
-	if ((sck = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+	if ((socket_udp = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
 		perror("Error");
 		return 1;
@@ -62,14 +87,14 @@ int main(int argc, char *argv[])
 	len = sizeof(addr);
 
 	// realizamos bind con el socket
-	if (bind(sck, (const struct sockaddr *)&addr, len) < 0)
+	if (bind(socket_udp, (const struct sockaddr *)&addr, len) < 0)
 	{
 		perror("bind fallido");
 		return 1;
 	}
 
-	/*cogemos el puerto del proceso*/
-	getsockname(sck, (struct sockaddr *)&addr, &len);
+	/*cogemos el puerto del proceso actual*/
+	getsockname(socket_udp, (struct sockaddr *)&addr, &len);
 	puerto_udp = addr.sin_port;
 
 	fprintf(stdout, "%s: %d\n", argv[1], puerto_udp);
@@ -108,8 +133,7 @@ int main(int argc, char *argv[])
 	{
 		if (strcmp(line, "EVENT\n") == 0)
 		{
-			fprintf(stdout, "%s: TICK\n", argv[1]);
-			event(logicClock, procesoActual);
+			event(logicClock, procesoActual, argv[1]);
 			continue;
 		}
 
@@ -122,26 +146,57 @@ int main(int argc, char *argv[])
 
 		if (strcmp(line, "RECEIVE\n") == 0)
 		{
-			
+			if (read(socket_udp, &respuesta, sizeof(struct mensaje)) < 0)
+			{
+				fprintf(stderr, "Error en el read\n");
+				close(socket_udp);
+				return -1;
+			}
+
+			/*para mirar de qué tipo es la respuesta*/
+			switch (respuesta.tipo)
+			{
+			/*tipo MSG*/
+			case 0:
+				strcpy(tipo, "MSG");
+				break;
+
+			/*tipo LOCK*/
+			case 1:
+				strcpy(tipo, "LOCK");
+				break;
+
+			/*tipo OK*/
+			case 2:
+				strcpy(tipo, "OK");
+				break;
+			}
+
+			fprintf(stdout, "RECEIVE(%s,%s)\n", tipo, respuesta.emisor);
 			continue;
 		}
 
-		sscanf(line, "%s %s", aux,proc);
+		sscanf(line, "%s %s", aux, proc);
 
 		if (strcmp(aux, "MESSAGETO") == 0)
 		{
 			/*se genera un evento*/
-			fprintf(stdout, "%s: TICK\n", argv[1]);
-			event(logicClock, procesoActual);
-			toString(logicClock,lista.length, buff);
-			fprintf(stdout, "SEND(MSG,%d)\n", proc);
+			event(logicClock, procesoActual, argv[1]);
+			/*guardamos el reloj en formato string en el buffer del mensaje*/
+			toString(logicClock, lista.length, msj.buff);
+			/*mandamos el mensaje de tipo MSG*/
+			strcpy(msj.emisor, argv[1]);
+			msj.tipo = 0;
+			enviar(proc, &msj);
+
+			fprintf(stdout, "SEND(MSG,%s)\n", proc);
 			continue;
 		}
 
-
-
-
 	}
+
+	freeLista();
+	close(socket_udp);
 
 	return 0;
 }

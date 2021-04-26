@@ -3,9 +3,9 @@
 #ifndef _CONTROLADOR_H
 #define _CONTROLADOR_H
 
-int event(int *logicClock, int pos);
+int event(int *logicClock, int pos, char * name);
 
-int combineLC(int *lc1, int *lc2, int length, int j);
+int combineLC(int *lc1, int *lc2, int length, char * name);
 
 int esAnterior(int *lcProceso1, int *lcProceso2, int id1, int id2, int length);
 

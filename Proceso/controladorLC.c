@@ -4,19 +4,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "controladorLC.h"
+#include "lista.h"
 
 /*operación que aumenta el contador de una posición del reloj*/
-int event(int *logicClock, int pos)
+int event(int *logicClock, int pos, char *name)
 {
-    logicClock[pos-1] = logicClock[pos-1] + 1;
+    fprintf(stdout, "%s: TICK\n", name);
+    logicClock[pos - 1] = logicClock[pos - 1] + 1;
     return 0;
 }
 
 /*operacion que combina dos relojes lógicos. Esta operación*/
-/*se usará si el proceso con el reloj lc1 (proceso j) recibe */
+/*se usará si el proceso con el reloj lc1 (proceso actual) recibe */
 /*un mensaje del proceso de lc2.*/
-int combineLC(int *lc1, int *lc2, int length, int j)
+int combineLC(int *lc1, int *lc2, int length, char * name)
 {
+    struct proceso p;
     int i;
     for (i = 0; i < length; i++)
     {
@@ -27,8 +30,12 @@ int combineLC(int *lc1, int *lc2, int length, int j)
             lc1[i] = lc2[i];
         }
     }
-    /*esta operación conlleva un evento, por lo que hay que actualizar el componente j*/
-    return event(lc1, j);
+    /*obtenemos información del proceso receptor*/
+    p = getProceso(name);
+
+    /*esta operación conlleva un evento, por lo que hay que actualizar el reloj del proceso.*/
+    /*La posición que se actualizará, es la del proceso (el id).*/
+    return event(lc1, p.id, name);
 }
 
 /*operación que devuelve 0 si lcProceso1 es anterior a lcProceso2, 1 en caso contrario*/
@@ -61,7 +68,6 @@ int esAnterior(int *lcProceso1, int *lcProceso2, int id1, int id2, int length)
     return 0;
 }
 
-
 /*operación que devuelve en buff el reloj lógico en formato String*/
 void toString(int *logicClock, int length, char *buff)
 {
@@ -85,7 +91,6 @@ void toString(int *logicClock, int length, char *buff)
     buff[j] = '\0';
 }
 
-
 /*operación que imprime un reloj lógico*/
 void printLC(int *logicClock, int length)
 {
@@ -93,4 +98,3 @@ void printLC(int *logicClock, int length)
     toString(logicClock, length, buff);
     fprintf(stdout, "%s\n", buff);
 }
-
