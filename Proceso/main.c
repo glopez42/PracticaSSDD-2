@@ -57,9 +57,12 @@ int main(int argc, char *argv[])
 	int *logicClock;
 	socklen_t len;
 	char line[80], proc[80], aux[80], tipo[5];
-	struct sockaddr_in addr;
+	struct sockaddr_in addr, dir;
 	struct proceso *p;
 	struct mensaje msj, respuesta;
+	/*para el multicast*/
+	struct in_addr dir_mcast, dir_grupo;
+	struct ip_mreqn info_mcast;
 
 	if (argc < 2)
 	{
@@ -78,7 +81,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	/*Preparamos sockaddr_in*/
+	/*Preparamos la dirección del socket*/
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = INADDR_ANY;
 	/*Para que decida el sistema el puerto, se deja a 0*/
@@ -96,6 +99,33 @@ int main(int argc, char *argv[])
 	/*cogemos el puerto del proceso actual*/
 	getsockname(socket_udp, (struct sockaddr *)&addr, &len);
 	puerto_udp = addr.sin_port;
+
+	/* Incorporación al grupo de multidifusión en la dirección 239.0.0.1 */
+	inet_aton("239.0.0.1", &dir_mcast);
+	info_mcast.imr_multiaddr = dir_mcast;
+	info_mcast.imr_address.s_addr = INADDR_ANY;
+	info_mcast.imr_ifindex = 0;
+	if (setsockopt(socket_udp, SOL_IP, IP_ADD_MEMBERSHIP, &info_mcast,
+				   sizeof(info_mcast)) < 0)
+	{
+		perror("error en setsockopt");
+		close(socket_udp);
+		return 1;
+	}
+	
+	if (setsockopt(socket_udp, SOL_IP, IP_MULTICAST_IF, &info_mcast,
+				   sizeof(info_mcast)) < 0)
+	{
+		perror("error en setsockopt");
+		close(socket_udp);
+		return 1;
+	}
+
+	/*Preparamos la dirección de envío multicast*/
+	inet_aton("239.0.0.1", &dir_grupo);
+	dir.sin_addr = dir_grupo;
+	dir.sin_port = htons(puerto_udp);
+	dir.sin_family = AF_INET;
 
 	fprintf(stdout, "%s: %d\n", argv[1], puerto_udp);
 
@@ -192,7 +222,6 @@ int main(int argc, char *argv[])
 			fprintf(stdout, "SEND(MSG,%s)\n", proc);
 			continue;
 		}
-
 	}
 
 	freeLista();
