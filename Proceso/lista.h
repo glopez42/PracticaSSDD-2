@@ -12,6 +12,15 @@ struct proceso
 	int id;
 };
 
+
+/*lista para guardar procesos*/
+struct nodo
+{
+	struct proceso proc;
+    int pos;
+	struct nodo *next;
+};
+
 /*struct de la estructura de datos*/
 struct lista
 {
@@ -19,6 +28,7 @@ struct lista
 	struct nodo *final;
 	int length;
 } lista;
+
 
 /*función que devuelve el proceso de la lista*/
 /*que coincida con el nombre dado*/

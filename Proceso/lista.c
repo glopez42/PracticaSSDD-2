@@ -5,14 +5,6 @@
 #include "lista.h"
 
 
-/*lista para guardar procesos*/
-struct nodo
-{
-	struct proceso proc;
-    int pos;
-	struct nodo *next;
-};
-
 /*función que devuelve en p, el proceso de la lista*/
 /*que coincida con el nombre dado*/
 struct proceso getProceso(char *nombre)

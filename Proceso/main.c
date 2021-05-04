@@ -20,12 +20,14 @@
 #include "controladorLC.h"
 
 int puerto_udp, socket_udp;
+struct sockaddr_in addr, origen;
+char * nombreProceso;
 
 struct mensaje
 {
-	int tipo; /*MSG = 0, LOCK = 1, OK = 2*/
-	char buff[80];
 	char emisor[80];
+	int lc[80];
+	int tipo; /*MSG = 0, LOCK = 1, OK = 2*/
 };
 
 /*función auxiliar para mandar mensajes udp a un proceso*/
@@ -48,21 +50,21 @@ int enviar(char *destName, struct mensaje *m)
 		return -1;
 	}
 
+	fprintf(stdout, "%s: SEND(MSG,%s)\n", nombreProceso, destName);
 	return 0;
 }
 
 int main(int argc, char *argv[])
 {
-	int port, id, procesoActual;
+	int port, id, procesoActual, i;
 	int *logicClock;
 	socklen_t len;
 	char line[80], proc[80], aux[80], tipo[5];
-	struct sockaddr_in addr, dir;
 	struct proceso *p;
+	struct nodo *actual;
 	struct mensaje msj, respuesta;
-	/*para el multicast*/
-	struct in_addr dir_mcast, dir_grupo;
-	struct ip_mreqn info_mcast;
+
+	nombreProceso = argv[1];
 
 	if (argc < 2)
 	{
@@ -74,10 +76,9 @@ int main(int argc, char *argv[])
 	setvbuf(stdout, (char *)malloc(sizeof(char) * 80), _IOLBF, 80);
 	setvbuf(stdin, (char *)malloc(sizeof(char) * 80), _IOLBF, 80);
 
-	/*Preparamos socket*/
-	if ((socket_udp = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+	if ((socket_udp = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
 	{
-		perror("Error");
+		perror("error creando socket");
 		return 1;
 	}
 
@@ -86,7 +87,6 @@ int main(int argc, char *argv[])
 	addr.sin_addr.s_addr = INADDR_ANY;
 	/*Para que decida el sistema el puerto, se deja a 0*/
 	addr.sin_port = 0;
-
 	len = sizeof(addr);
 
 	// realizamos bind con el socket
@@ -100,34 +100,7 @@ int main(int argc, char *argv[])
 	getsockname(socket_udp, (struct sockaddr *)&addr, &len);
 	puerto_udp = addr.sin_port;
 
-	/* Incorporación al grupo de multidifusión en la dirección 239.0.0.1 */
-	inet_aton("239.0.0.1", &dir_mcast);
-	info_mcast.imr_multiaddr = dir_mcast;
-	info_mcast.imr_address.s_addr = INADDR_ANY;
-	info_mcast.imr_ifindex = 0;
-	if (setsockopt(socket_udp, SOL_IP, IP_ADD_MEMBERSHIP, &info_mcast,
-				   sizeof(info_mcast)) < 0)
-	{
-		perror("error en setsockopt");
-		close(socket_udp);
-		return 1;
-	}
-	
-	if (setsockopt(socket_udp, SOL_IP, IP_MULTICAST_IF, &info_mcast,
-				   sizeof(info_mcast)) < 0)
-	{
-		perror("error en setsockopt");
-		close(socket_udp);
-		return 1;
-	}
-
-	/*Preparamos la dirección de envío multicast*/
-	inet_aton("239.0.0.1", &dir_grupo);
-	dir.sin_addr = dir_grupo;
-	dir.sin_port = htons(puerto_udp);
-	dir.sin_family = AF_INET;
-
-	fprintf(stdout, "%s: %d\n", argv[1], puerto_udp);
+	fprintf(stdout, "%s: %d\n", nombreProceso, puerto_udp);
 
 	id = 1;
 	for (; fgets(line, 80, stdin);)
@@ -146,7 +119,7 @@ int main(int argc, char *argv[])
 		/*se guarda en la lista*/
 		addProceso(p);
 
-		if (!strcmp(proc, argv[1]))
+		if (!strcmp(proc, nombreProceso))
 		{ /* Este proceso soy yo */
 			procesoActual = id;
 		}
@@ -163,20 +136,22 @@ int main(int argc, char *argv[])
 	{
 		if (strcmp(line, "EVENT\n") == 0)
 		{
-			event(logicClock, procesoActual, argv[1]);
+			event(logicClock, procesoActual, nombreProceso);
 			continue;
 		}
 
 		if (strcmp(line, "GETCLOCK\n") == 0)
 		{
-			fprintf(stdout, "%s: ", argv[1]);
+			fprintf(stdout, "%s: ", nombreProceso);
 			printLC(logicClock, lista.length);
 			continue;
 		}
 
 		if (strcmp(line, "RECEIVE\n") == 0)
 		{
-			if (read(socket_udp, &respuesta, sizeof(struct mensaje)) < 0)
+			len = sizeof(struct sockaddr_in);
+
+			if (recvfrom(socket_udp, &respuesta, sizeof(struct mensaje), 0, (struct sockaddr *)&origen, &len) < 0)
 			{
 				fprintf(stderr, "Error en el read\n");
 				close(socket_udp);
@@ -189,6 +164,8 @@ int main(int argc, char *argv[])
 			/*tipo MSG*/
 			case 0:
 				strcpy(tipo, "MSG");
+				/*se combina el reloj del proceso con el del mensaje*/
+				combineLC(logicClock, respuesta.lc, lista.length);
 				break;
 
 			/*tipo LOCK*/
@@ -202,7 +179,9 @@ int main(int argc, char *argv[])
 				break;
 			}
 
-			fprintf(stdout, "RECEIVE(%s,%s)\n", tipo, respuesta.emisor);
+			fprintf(stdout, "%s: RECEIVE(%s,%s)\n", nombreProceso, tipo, respuesta.emisor);
+			/*la recepción de un mensaje produce un evento*/
+			event(logicClock, procesoActual, nombreProceso);
 			continue;
 		}
 
@@ -211,19 +190,44 @@ int main(int argc, char *argv[])
 		if (strcmp(aux, "MESSAGETO") == 0)
 		{
 			/*se genera un evento*/
-			event(logicClock, procesoActual, argv[1]);
-			/*guardamos el reloj en formato string en el buffer del mensaje*/
-			toString(logicClock, lista.length, msj.buff);
+			event(logicClock, procesoActual, nombreProceso);
+			/*guardamos el reloj*/
+			copyClock(logicClock, msj.lc, lista.length);
 			/*mandamos el mensaje de tipo MSG*/
-			strcpy(msj.emisor, argv[1]);
+			strcpy(msj.emisor, nombreProceso);
 			msj.tipo = 0;
 			enviar(proc, &msj);
+			continue;
+		}
 
-			fprintf(stdout, "SEND(MSG,%s)\n", proc);
+		if (strcmp(aux, "LOCK") == 0)
+		{
+			/*se genera un evento*/
+			event(logicClock, procesoActual, nombreProceso);
+			/*guardamos el reloj*/
+			copyClock(logicClock, msj.lc, lista.length);
+			/*mandamos el mensaje de tipo LOCK*/
+			strcpy(msj.emisor, nombreProceso);
+			msj.tipo = 1;
+
+			actual = lista.inicio;
+
+			/*mandamos un mensaje a todos los de la lista*/
+			for (i = 1; i <= lista.length; i++)
+			{
+				/*hay que saltarse el proceso que envía el mensaje*/
+				if (i != id)
+				{
+					enviar(actual->proc.nombre, &msj);
+				}
+				actual = actual->next;
+			}
+
 			continue;
 		}
 	}
 
+	free(p);
 	freeLista();
 	close(socket_udp);
 
