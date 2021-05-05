@@ -7,13 +7,13 @@
 
 /*función que devuelve en p, el proceso de la lista*/
 /*que coincida con el nombre dado*/
-struct proceso getProceso(char *nombre)
+struct proceso getProceso(struct lista *lista, char *nombre)
 {
 
 	int found = -1;
 	struct nodo *nodoActual;
 	struct proceso res;
-	nodoActual = lista.inicio;
+	nodoActual = lista->inicio;
 
 	while (nodoActual != NULL && found == -1)
 	{
@@ -34,33 +34,33 @@ struct proceso getProceso(char *nombre)
 }
 
 /*función que añade un proceso a la lista*/
-int addProceso(struct proceso *p)
+int addProceso(struct lista *lista, struct proceso *p)
 {
 	struct nodo *n;
 	n = malloc(sizeof(struct nodo));
 	n->proc = *p;
 
-	if (lista.length == 0)
+	if (lista->length == 0)
 	{
-		lista.inicio = n;
-		lista.final = n;
+		lista->inicio = n;
+		lista->end = n;
 	}
 	else
 	{
-		lista.final->next = n;
-		lista.final = n;
+		lista->end->next = n;
+		lista->end = n;
 	}
-    n->pos = lista.length;
-	lista.length = lista.length + 1;
+	lista->length = lista->length + 1;
+    n->pos = lista->length;
 	return 0;
 }
 
 /*función que libera la memoria usada por una lista*/
-void freeLista()
+void freeLista(struct lista *lista)
 {
 	struct nodo *nodoActual;
 	struct nodo *nodoSiguiente;
-	nodoActual = lista.inicio;
+	nodoActual = lista->inicio;
 
 	while (nodoActual != NULL)
 	{

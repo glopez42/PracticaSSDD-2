@@ -21,26 +21,48 @@
 
 int puerto_udp, socket_udp;
 struct sockaddr_in addr, origen;
-char * nombreProceso;
+char *nombreProceso;
+struct lista lista;
+struct lista *pendientes;
 
 struct mensaje
 {
 	char emisor[80];
+	char region[80];
 	int lc[80];
 	int tipo; /*MSG = 0, LOCK = 1, OK = 2*/
 };
 
 /*función auxiliar para mandar mensajes udp a un proceso*/
-int enviar(char *destName, struct mensaje *m)
+int enviar(char *destName, struct mensaje *m, int t)
 {
 	struct proceso p;
 	struct sockaddr_in addr_env;
+	char tipo[5];
 	addr_env.sin_family = AF_INET;
 	addr_env.sin_addr.s_addr = INADDR_ANY;
 
 	/*obtenemos el puerto destino*/
-	p = getProceso(destName);
+	p = getProceso(&lista, destName);
 	addr_env.sin_port = p.puerto;
+
+	/*si es de tipo MSG*/
+	if (t == 0)
+	{
+		strcpy(tipo, "MSG");
+	}
+
+	/*si es de tipo LOCK*/
+	if (t == 1)
+	{
+		strcpy(tipo, "LOCK");
+	}
+
+	/*si es de tipo MSG*/
+	if (t == 2)
+	{
+		strcpy(tipo, "OK");
+	}
 
 	/*mandamos el mensaje*/
 	if (sendto(socket_udp, m, sizeof(struct mensaje), 0, (struct sockaddr *)&addr_env, sizeof(addr_env)) < 0)
@@ -50,21 +72,23 @@ int enviar(char *destName, struct mensaje *m)
 		return -1;
 	}
 
-	fprintf(stdout, "%s: SEND(MSG,%s)\n", nombreProceso, destName);
+	fprintf(stdout, "%s: SEND(%s,%s)\n", nombreProceso, tipo, destName);
 	return 0;
 }
 
 int main(int argc, char *argv[])
 {
-	int port, id, procesoActual, i;
-	int *logicClock;
+	int port, id, procesoActual, i, enterRegionCritica, dentroRegionCritica, nRespuestas;
+	int *logicClock, lcPeticion[80];
 	socklen_t len;
-	char line[80], proc[80], aux[80], tipo[5];
+	char line[80], proc[80], aux[80], tipo[5], argumento[80], seccion[80];
 	struct proceso *p;
 	struct nodo *actual;
 	struct mensaje msj, respuesta;
 
 	nombreProceso = argv[1];
+	enterRegionCritica = 1;
+	dentroRegionCritica = 1;
 
 	if (argc < 2)
 	{
@@ -117,7 +141,7 @@ int main(int argc, char *argv[])
 		p->id = id;
 
 		/*se guarda en la lista*/
-		addProceso(p);
+		addProceso(&lista, p);
 
 		if (!strcmp(proc, nombreProceso))
 		{ /* Este proceso soy yo */
@@ -158,34 +182,116 @@ int main(int argc, char *argv[])
 				return -1;
 			}
 
-			/*para mirar de qué tipo es la respuesta*/
+			/*si es de tipo MSG*/
+			if (respuesta.tipo == 0)
+			{
+				strcpy(tipo, "MSG");
+			}
+
+			/*si es de tipo LOCK*/
+			if (respuesta.tipo == 1)
+			{
+				strcpy(tipo, "LOCK");
+			}
+
+			/*si es de tipo MSG*/
+			if (respuesta.tipo == 2)
+			{
+				strcpy(tipo, "OK");
+			}
+
+			/*se imprime la traza*/
+			fprintf(stdout, "%s: RECEIVE(%s,%s)\n", nombreProceso, tipo, respuesta.emisor);
+			/*la recepción de un mensaje produce un evento*/
+			event(logicClock, procesoActual, nombreProceso);
+
+			/*para mirar cómo se debe reaccionar ante el mensaje*/
 			switch (respuesta.tipo)
 			{
 			/*tipo MSG*/
 			case 0:
-				strcpy(tipo, "MSG");
 				/*se combina el reloj del proceso con el del mensaje*/
 				combineLC(logicClock, respuesta.lc, lista.length);
 				break;
 
 			/*tipo LOCK*/
 			case 1:
-				strcpy(tipo, "LOCK");
+
+				/*si el proceso receptor quiere entrar en una region crítica*/
+				if (enterRegionCritica == 0)
+				{
+					/*se comprueba si quieren entrar a la misma*/
+					if (strcmp(seccion, respuesta.region) == 0)
+					{
+						id = getProceso(&lista, respuesta.emisor).id;
+						/*se comparan los relojes*/
+						if (esAnterior(lcPeticion, msj.lc, procesoActual, id, lista.length) == 1)
+						{
+							/*no se responde si el reloj del proceso que recibe es anterior*/
+							/*guardamos en una lista de pendientes al proceso para mandar un OK después*/
+							*p = getProceso(&lista, respuesta.emisor);
+							addProceso(pendientes, p);
+						}
+						/*se manda un mensaje tipo OK si el reloj del mensaje es anterior*/
+						else
+						{
+							/*se genera un evento*/
+							event(logicClock, procesoActual, nombreProceso);
+							strcpy(msj.emisor, nombreProceso);
+							msj.tipo = 2;
+							enviar(respuesta.emisor, &msj, 2);
+						}
+					}
+					/*si no, se manda un mensaje tipo OK*/
+					else
+					{
+						/*se genera un evento*/
+						event(logicClock, procesoActual, nombreProceso);
+						strcpy(msj.emisor, nombreProceso);
+						msj.tipo = 2;
+						enviar(respuesta.emisor, &msj, 2);
+					}
+				}
+
+				/*si el proceso receptor ya está en la seccion crítica*/
+				else if (dentroRegionCritica == 0 && strcmp(seccion, respuesta.region) == 0)
+				{
+					/*guardamos en una lista de pendientes al proceso para mandar un OK después*/
+					*p = getProceso(&lista, respuesta.emisor);
+					addProceso(pendientes, p);
+				}
+
+				/*en otro caso, se manda un mensaje tipo OK*/
+				else
+				{
+					/*se genera un evento*/
+					event(logicClock, procesoActual, nombreProceso);
+					strcpy(msj.emisor, nombreProceso);
+					msj.tipo = 2;
+					enviar(respuesta.emisor, &msj, 2);
+				}
+
 				break;
 
 			/*tipo OK*/
 			case 2:
-				strcpy(tipo, "OK");
+				nRespuestas = nRespuestas + 1;
+
+				if (nRespuestas == (lista.length - 1))
+				{
+					/*entra en la seccion, por lo que cambia el flag*/
+					enterRegionCritica = 1;
+					dentroRegionCritica = 0;
+					fprintf(stdout, "%s: MUTEX(%s)\n", nombreProceso, seccion);
+				}
+
 				break;
 			}
 
-			fprintf(stdout, "%s: RECEIVE(%s,%s)\n", nombreProceso, tipo, respuesta.emisor);
-			/*la recepción de un mensaje produce un evento*/
-			event(logicClock, procesoActual, nombreProceso);
 			continue;
 		}
 
-		sscanf(line, "%s %s", aux, proc);
+		sscanf(line, "%s %s", aux, argumento);
 
 		if (strcmp(aux, "MESSAGETO") == 0)
 		{
@@ -196,12 +302,14 @@ int main(int argc, char *argv[])
 			/*mandamos el mensaje de tipo MSG*/
 			strcpy(msj.emisor, nombreProceso);
 			msj.tipo = 0;
-			enviar(proc, &msj);
+			enviar(argumento, &msj, 0);
 			continue;
 		}
 
 		if (strcmp(aux, "LOCK") == 0)
 		{
+			/*el argumento pasado por consola será la seccion a la que se quiere acceder*/
+			strcpy(seccion, argumento);
 			/*se genera un evento*/
 			event(logicClock, procesoActual, nombreProceso);
 			/*guardamos el reloj*/
@@ -209,26 +317,57 @@ int main(int argc, char *argv[])
 			/*mandamos el mensaje de tipo LOCK*/
 			strcpy(msj.emisor, nombreProceso);
 			msj.tipo = 1;
-
-			actual = lista.inicio;
+			strcpy(msj.region, argumento);
 
 			/*mandamos un mensaje a todos los de la lista*/
+			actual = lista.inicio;
 			for (i = 1; i <= lista.length; i++)
 			{
 				/*hay que saltarse el proceso que envía el mensaje*/
-				if (i != id)
+				if (i != procesoActual)
 				{
-					enviar(actual->proc.nombre, &msj);
+					enviar(actual->proc.nombre, &msj, 1);
 				}
 				actual = actual->next;
 			}
 
+			/*se ponen los flags adecuados*/
+			enterRegionCritica = 0;
+			dentroRegionCritica = 1;
+			nRespuestas = 0;
+			/*Se guarda el reloj en el que se hizo la petición*/
+			copyClock(logicClock, lcPeticion, lista.length);
+			/*Guardamos tamaño para la lista de pendientes*/
+			pendientes = malloc(sizeof(struct lista));
 			continue;
+		}
+
+		if (strcmp(aux, "UNLOCK") == 0 && strcmp(argumento, seccion) == 0)
+		{
+			dentroRegionCritica = 1;
+
+			/*mandamos el mensaje de tipo OK a los procesos pendientes*/
+			strcpy(msj.emisor, nombreProceso);
+			msj.tipo = 2;
+
+			actual = pendientes->inicio;
+			for (i = 1; i <= lista.length; i++)
+			{
+				/*hay que saltarse el proceso que envía el mensaje*/
+				if (i != procesoActual)
+				{
+					enviar(actual->proc.nombre, &msj, 2);
+				}
+				actual = actual->next;
+			}
+			/*liberamos la lista de pendientes*/
+			freeLista(pendientes);
+			free(pendientes);
 		}
 	}
 
 	free(p);
-	freeLista();
+	freeLista(&lista);
 	close(socket_udp);
 
 	return 0;

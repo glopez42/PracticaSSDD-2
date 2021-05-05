@@ -25,20 +25,20 @@ struct nodo
 struct lista
 {
 	struct nodo *inicio;
-	struct nodo *final;
+	struct nodo *end;
 	int length;
-} lista;
+};
 
 
 /*función que devuelve el proceso de la lista*/
 /*que coincida con el nombre dado*/
-struct proceso getProceso(char *nombre);
+struct proceso getProceso(struct lista *lista,char *nombre);
 
 /*función que añade un proceso a la lista*/
-int addProceso(struct proceso *p);
+int addProceso(struct lista *lista,struct proceso *p);
 
 /*función que libera la memoria usada por una lista*/
-void freeLista();
+void freeLista(struct lista *lista);
 
 
 #endif
