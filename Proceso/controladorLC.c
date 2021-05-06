@@ -10,7 +10,7 @@
 /*operación que aumenta el contador de una posición del reloj*/
 int event(int *logicClock, int pos, char *name)
 {
-    fprintf(stdout, "%s: TICK\n", name);
+    printf("%s: TICK\n", name);
     logicClock[pos - 1] = logicClock[pos - 1] + 1;
     return 0;
 }
@@ -82,20 +82,18 @@ int esAnterior(int *lcProceso1, int *lcProceso2, int id1, int id2, int length)
 /*operación que imprime un reloj lógico*/
 void printLC(int *logicClock, int length)
 {
-
-    fprintf(stdout, "LC[");
+    printf("LC[");
     int i;
     for (i = 0; i < length; i++)
     {
-        fprintf(stdout, "%d", logicClock[i]);
+        printf("%d", logicClock[i]);
         if (i < length - 1)
         {
-            fprintf(stdout, ",");
+            printf(",");
         }
         
     }
-    
-    fprintf(stdout, "]\n");
+    printf("]\n");
 }
 
 /*operación que copia el reloj lc y lo devuelve en dest*/

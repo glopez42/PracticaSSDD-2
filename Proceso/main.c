@@ -72,7 +72,7 @@ int enviar(char *destName, struct mensaje *m, int t)
 		return -1;
 	}
 
-	fprintf(stdout, "%s: SEND(%s,%s)\n", nombreProceso, tipo, destName);
+	printf("%s: SEND(%s,%s)\n", nombreProceso, tipo, destName);
 	return 0;
 }
 
@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 	getsockname(socket_udp, (struct sockaddr *)&addr, &len);
 	puerto_udp = addr.sin_port;
 
-	fprintf(stdout, "%s: %d\n", nombreProceso, puerto_udp);
+	printf("%s: %d\n", nombreProceso, puerto_udp);
 
 	id = 1;
 	for (; fgets(line, 80, stdin);)
@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
 
 		if (strcmp(line, "GETCLOCK\n") == 0)
 		{
-			fprintf(stdout, "%s: ", nombreProceso);
+			printf("%s: ", nombreProceso);
 			printLC(logicClock, lista.length);
 			continue;
 		}
@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
 			}
 
 			/*se imprime la traza*/
-			fprintf(stdout, "%s: RECEIVE(%s,%s)\n", nombreProceso, tipo, respuesta.emisor);
+			printf("%s: RECEIVE(%s,%s)\n", nombreProceso, tipo, respuesta.emisor);
 			/*la recepción de un mensaje produce un evento*/
 			event(logicClock, procesoActual, nombreProceso);
 			/*se combina el reloj del proceso con el del mensaje*/
@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
 					/*entra en la seccion, por lo que cambia el flag*/
 					enterRegionCritica = 1;
 					dentroRegionCritica = 0;
-					fprintf(stdout, "%s: MUTEX(%s)\n", nombreProceso, seccion);
+					printf("%s: MUTEX(%s)\n", nombreProceso, seccion);
 				}
 
 				break;
