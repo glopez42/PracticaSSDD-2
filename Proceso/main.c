@@ -204,14 +204,15 @@ int main(int argc, char *argv[])
 			fprintf(stdout, "%s: RECEIVE(%s,%s)\n", nombreProceso, tipo, respuesta.emisor);
 			/*la recepción de un mensaje produce un evento*/
 			event(logicClock, procesoActual, nombreProceso);
+			/*se combina el reloj del proceso con el del mensaje*/
+			combineLC(logicClock, respuesta.lc, lista.length);
 
 			/*para mirar cómo se debe reaccionar ante el mensaje*/
 			switch (respuesta.tipo)
 			{
 			/*tipo MSG*/
 			case 0:
-				/*se combina el reloj del proceso con el del mensaje*/
-				combineLC(logicClock, respuesta.lc, lista.length);
+
 				break;
 
 			/*tipo LOCK*/
@@ -225,9 +226,9 @@ int main(int argc, char *argv[])
 					{
 						id = getProceso(&lista, respuesta.emisor).id;
 						/*se comparan los relojes*/
-						if (esAnterior(lcPeticion, msj.lc, procesoActual, id, lista.length) == 1)
+						if (esAnterior(lcPeticion, respuesta.lc, procesoActual, id, lista.length) == 0)
 						{
-							/*no se responde si el reloj del proceso que recibe es anterior*/
+							/*no se responde si el reloj del proceso receptor es anterior*/
 							/*guardamos en una lista de pendientes al proceso para mandar un OK después*/
 							*p = getProceso(&lista, respuesta.emisor);
 							addProceso(pendientes, p);
@@ -238,6 +239,7 @@ int main(int argc, char *argv[])
 							/*se genera un evento*/
 							event(logicClock, procesoActual, nombreProceso);
 							strcpy(msj.emisor, nombreProceso);
+							copyClock(logicClock, msj.lc, lista.length);
 							msj.tipo = 2;
 							enviar(respuesta.emisor, &msj, 2);
 						}
@@ -248,6 +250,7 @@ int main(int argc, char *argv[])
 						/*se genera un evento*/
 						event(logicClock, procesoActual, nombreProceso);
 						strcpy(msj.emisor, nombreProceso);
+						copyClock(logicClock, msj.lc, lista.length);
 						msj.tipo = 2;
 						enviar(respuesta.emisor, &msj, 2);
 					}
@@ -267,6 +270,7 @@ int main(int argc, char *argv[])
 					/*se genera un evento*/
 					event(logicClock, procesoActual, nombreProceso);
 					strcpy(msj.emisor, nombreProceso);
+					copyClock(logicClock, msj.lc, lista.length);
 					msj.tipo = 2;
 					enviar(respuesta.emisor, &msj, 2);
 				}
@@ -345,23 +349,22 @@ int main(int argc, char *argv[])
 		if (strcmp(aux, "UNLOCK") == 0 && strcmp(argumento, seccion) == 0)
 		{
 			dentroRegionCritica = 1;
-
-			/*mandamos el mensaje de tipo OK a los procesos pendientes*/
-			strcpy(msj.emisor, nombreProceso);
-			msj.tipo = 2;
-
-			actual = pendientes->inicio;
-			for (i = 1; i <= lista.length; i++)
+			if (pendientes->length > 0)
 			{
-				/*hay que saltarse el proceso que envía el mensaje*/
-				if (i != procesoActual)
+				/*mandamos el mensaje de tipo OK a los procesos pendientes*/
+				strcpy(msj.emisor, nombreProceso);
+				msj.tipo = 2;
+				actual = pendientes->inicio;
+				for (i = 1; i <= pendientes->length; i++)
 				{
+					event(logicClock,procesoActual,nombreProceso);
+					copyClock(logicClock, msj.lc, lista.length);
 					enviar(actual->proc.nombre, &msj, 2);
+					actual = actual->next;
 				}
-				actual = actual->next;
+				/*liberamos la lista de pendientes*/
+				freeLista(pendientes);
 			}
-			/*liberamos la lista de pendientes*/
-			freeLista(pendientes);
 			free(pendientes);
 		}
 	}

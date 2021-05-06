@@ -60,7 +60,7 @@ C: [EVENT]-> A{--} B{--} C{TICK} D{--}
 # Ahora liberamos X E Y
 D: [UNLOCK X]-> A{--} B{--} C{--} D{--}
 C: [UNLOCK Y]-> A{--} B{--} C{--} D{--}
-# Terminando ¿Valores de LCs?
+# Terminando ï¿½Valores de LCs?
 A: [GETCLOCK]-> A{LC[12,5,6,6]} B{--} C{--} D{--}
 B: [GETCLOCK]-> A{--} B{LC[4,13,6,6]} C{--} D{--}
 C: [GETCLOCK]-> A{--} B{--} C{LC[10,11,12,8]} D{--}

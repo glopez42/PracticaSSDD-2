@@ -37,31 +37,45 @@ int combineLC(int *lc1, int *lc2, int length)
 /*operación que devuelve 0 si lcProceso1 es anterior a lcProceso2, 1 en caso contrario*/
 int esAnterior(int *lcProceso1, int *lcProceso2, int id1, int id2, int length)
 {
-    int i, totalIguales, anterior;
-    for (i = 0; i < length; i++)
+    int i, p1Anterior = 1, p2Anterior = 1;
+
+    /*hay que comprobar los dos reloles por si no se pudiese determinar cuál es anterior*/
+    for (i = 0; i < length && p2Anterior == 1; i++)
     {
         /*si un componente es mayor, el proceso2 será anterior*/
         if (lcProceso1[i] > lcProceso2[i])
         {
-            return 1;
+            p2Anterior = 0;
         }
-
-        /*si los componentes son iguales se suma el contador*/
-        if (lcProceso1[i] == lcProceso2[i])
-        {
-            totalIguales = totalIguales + 1;
-        }
+        
     }
 
-    /*si todos los componentes son iguales, el anterior será el de identificador menor*/
-    if (totalIguales == length)
+    for (i = 0; i < length && p1Anterior == 1; i++)
     {
-        anterior = (id1 < id2) ? 0 : 1;
-        return anterior;
+        /*si un componente es mayor, el proceso1 será anterior*/
+        if (lcProceso1[i] < lcProceso2[i])
+        {
+            p1Anterior = 0;
+        }
+        
     }
 
-    /*si llega hasta aquí, el proceso1 es anterior*/
-    return 0;
+    /*si el proceso1 es anterior*/
+    if (p1Anterior == 0 && p2Anterior == 1)
+    {
+        return 0;
+    }
+    /*si el proceso2 es anterior*/
+    else if (p1Anterior == 1 && p2Anterior == 0)
+    {
+        return 1;
+    } 
+    /*si no se puede determinar, el anterior será el de id menor*/
+    else
+    {
+        return ((id1 < id2)? 0: 1);
+    }
+    
 }
 
 
