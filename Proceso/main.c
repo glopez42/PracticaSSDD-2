@@ -158,6 +158,11 @@ int main(int argc, char *argv[])
 	/* Procesar Acciones */
 	while (fgets(line, 80, stdin))
 	{
+		if (strcmp(line, "FINISH\n") == 0)
+		{
+			break;
+		}
+
 		if (strcmp(line, "EVENT\n") == 0)
 		{
 			event(logicClock, procesoActual, nombreProceso);
