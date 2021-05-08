@@ -23,7 +23,6 @@ int puerto_udp, socket_udp;
 struct sockaddr_in addr, origen;
 char *nombreProceso;
 struct lista lista;
-struct lista *pendientes;
 
 struct mensaje
 {
@@ -32,6 +31,20 @@ struct mensaje
 	int lc[80];
 	int tipo; /*MSG = 0, LOCK = 1, OK = 2*/
 };
+
+/*para guardar información de una seccion*/
+struct seccion
+{
+	char nombre[80];
+	int nOK;
+	int quiereEntrar;
+	int dentro;
+	struct lista *pendientes;
+};
+
+/*lista de secciones*/
+struct seccion secciones[80];
+int nSecciones;
 
 /*función auxiliar para mandar mensajes udp a un proceso*/
 int enviar(char *destName, struct mensaje *m, int t)
@@ -76,19 +89,36 @@ int enviar(char *destName, struct mensaje *m, int t)
 	return 0;
 }
 
+/*función auxiliar que comprueba si el proceso quiere entrar a una seccion dada*/
+struct seccion * contains(char *nombreSeccion, int *encontrado)
+{
+	int i, pos = 0;
+	*encontrado = 1;
+	for (i = 0; i < nSecciones; i++)
+	{
+		if (strcmp(nombreSeccion, secciones[i].nombre) == 0)
+		{
+			*encontrado = 0;
+			pos = i;
+			break;
+		}
+	}
+	return &secciones[pos];
+}
+
 int main(int argc, char *argv[])
 {
-	int port, id, procesoActual, i, enterRegionCritica, dentroRegionCritica, nRespuestas;
+	int port, id, procesoActual, i, encontrado;
 	int *logicClock, lcPeticion[80];
 	socklen_t len;
 	char line[80], proc[80], aux[80], tipo[5], argumento[80], seccion[80];
 	struct proceso *p;
 	struct nodo *actual;
 	struct mensaje msj, respuesta;
+	struct seccion *sec;
 
 	nombreProceso = argv[1];
-	enterRegionCritica = 1;
-	dentroRegionCritica = 1;
+	nSecciones = 0;
 
 	if (argc < 2)
 	{
@@ -199,7 +229,7 @@ int main(int argc, char *argv[])
 				strcpy(tipo, "LOCK");
 			}
 
-			/*si es de tipo MSG*/
+			/*si es de tipo OK*/
 			if (respuesta.tipo == 2)
 			{
 				strcpy(tipo, "OK");
@@ -223,60 +253,45 @@ int main(int argc, char *argv[])
 			/*tipo LOCK*/
 			case 1:
 
-				/*si el proceso receptor quiere entrar en una region crítica*/
-				if (enterRegionCritica == 0)
+				/*si se quiere entrar en la misma sección crítica*/
+				sec = contains(respuesta.region, &encontrado);
+				if (encontrado == 0 && sec->quiereEntrar == 0)
 				{
-					/*se comprueba si quieren entrar a la misma*/
-					if (strcmp(seccion, respuesta.region) == 0)
+					id = getProceso(&lista, respuesta.emisor).id;
+					/*se comparan los relojes*/
+					if (esAnterior(lcPeticion, respuesta.lc, procesoActual, id, lista.length) == 0)
 					{
-						id = getProceso(&lista, respuesta.emisor).id;
-						/*se comparan los relojes*/
-						if (esAnterior(lcPeticion, respuesta.lc, procesoActual, id, lista.length) == 0)
-						{
-							/*no se responde si el reloj del proceso receptor es anterior*/
-							/*guardamos en una lista de pendientes al proceso para mandar un OK después*/
-							*p = getProceso(&lista, respuesta.emisor);
-							addProceso(pendientes, p);
-						}
-						/*se manda un mensaje tipo OK si el reloj del mensaje es anterior*/
-						else
-						{
-							/*se genera un evento*/
-							event(logicClock, procesoActual, nombreProceso);
-							strcpy(msj.emisor, nombreProceso);
-							copyClock(logicClock, msj.lc, lista.length);
-							msj.tipo = 2;
-							enviar(respuesta.emisor, &msj, 2);
-						}
+						/*si el proceso receptor es anterior no se responde*/
+						/*se guarda en la lista de pendientes para mandar un mensaje OK después*/
+						*p = getProceso(&lista, respuesta.emisor);
+						addProceso(sec->pendientes, p);
 					}
-					/*si no, se manda un mensaje tipo OK*/
 					else
 					{
-						/*se genera un evento*/
+						/*se envía OK si el del mensaje es anterior*/
 						event(logicClock, procesoActual, nombreProceso);
 						strcpy(msj.emisor, nombreProceso);
-						copyClock(logicClock, msj.lc, lista.length);
+						strcpy(msj.region, respuesta.region);
 						msj.tipo = 2;
+						copyClock(logicClock, msj.lc, lista.length);
 						enviar(respuesta.emisor, &msj, 2);
 					}
 				}
-
-				/*si el proceso receptor ya está en la seccion crítica*/
-				else if (dentroRegionCritica == 0 && strcmp(seccion, respuesta.region) == 0)
+				/*si ya está dentro de la sección crítica*/
+				else if (encontrado == 0 && sec->dentro == 0)
 				{
-					/*guardamos en una lista de pendientes al proceso para mandar un OK después*/
+					/*se guarda en la lista de pendientes para mandar un OK después*/
 					*p = getProceso(&lista, respuesta.emisor);
-					addProceso(pendientes, p);
+					addProceso(sec->pendientes, p);
 				}
-
-				/*en otro caso, se manda un mensaje tipo OK*/
 				else
 				{
-					/*se genera un evento*/
+					/*si no quiere entrar en esa sección se envía OK*/
 					event(logicClock, procesoActual, nombreProceso);
 					strcpy(msj.emisor, nombreProceso);
-					copyClock(logicClock, msj.lc, lista.length);
+					strcpy(msj.region, respuesta.region);
 					msj.tipo = 2;
+					copyClock(logicClock, msj.lc, lista.length);
 					enviar(respuesta.emisor, &msj, 2);
 				}
 
@@ -284,14 +299,15 @@ int main(int argc, char *argv[])
 
 			/*tipo OK*/
 			case 2:
-				nRespuestas = nRespuestas + 1;
 
-				if (nRespuestas == (lista.length - 1))
+				sec = contains(respuesta.region, &encontrado);
+				sec->nOK = sec->nOK + 1;
+				if (sec->nOK == (lista.length - 1))
 				{
-					/*entra en la seccion, por lo que cambia el flag*/
-					enterRegionCritica = 1;
-					dentroRegionCritica = 0;
-					printf("%s: MUTEX(%s)\n", nombreProceso, seccion);
+					/*entra dentro de la sección*/
+					sec->dentro = 0;
+					sec->quiereEntrar = 1;
+					printf("%s: MUTEX(%s)\n", nombreProceso, sec->nombre);
 				}
 
 				break;
@@ -340,37 +356,51 @@ int main(int argc, char *argv[])
 				actual = actual->next;
 			}
 
-			/*se ponen los flags adecuados*/
-			enterRegionCritica = 0;
-			dentroRegionCritica = 1;
-			nRespuestas = 0;
+			sec = contains(seccion, &encontrado);
+			if (encontrado == 1)
+			{
+				strcpy(secciones[nSecciones].nombre, seccion);
+				secciones[nSecciones].quiereEntrar = 0;
+				secciones[nSecciones].dentro = 1;
+				secciones[nSecciones].nOK = 0;
+				secciones[nSecciones].pendientes = malloc(sizeof(struct lista));
+				nSecciones = nSecciones + 1;
+			}
+			else
+			{
+				sec->quiereEntrar = 0;
+				sec->dentro = 1;
+				sec->nOK = 0;
+				secciones[nSecciones].pendientes = malloc(sizeof(struct lista));
+			}
+
 			/*Se guarda el reloj en el que se hizo la petición*/
 			copyClock(logicClock, lcPeticion, lista.length);
-			/*Guardamos tamaño para la lista de pendientes*/
-			pendientes = malloc(sizeof(struct lista));
 			continue;
 		}
 
-		if (strcmp(aux, "UNLOCK") == 0 && strcmp(argumento, seccion) == 0)
+		sec = contains(argumento, &encontrado);
+		if (strcmp(aux, "UNLOCK") == 0 && encontrado == 0)
 		{
-			dentroRegionCritica = 1;
-			if (pendientes->length > 0)
+			sec->dentro = 1;
+			if (sec->pendientes->length > 0)
 			{
 				/*mandamos el mensaje de tipo OK a los procesos pendientes*/
 				strcpy(msj.emisor, nombreProceso);
+				strcpy(msj.region, sec->nombre);
 				msj.tipo = 2;
-				actual = pendientes->inicio;
-				for (i = 1; i <= pendientes->length; i++)
+				actual = sec->pendientes->inicio;
+				for (i = 1; i <= sec->pendientes->length; i++)
 				{
-					event(logicClock,procesoActual,nombreProceso);
+					event(logicClock, procesoActual, nombreProceso);
 					copyClock(logicClock, msj.lc, lista.length);
 					enviar(actual->proc.nombre, &msj, 2);
 					actual = actual->next;
 				}
 				/*liberamos la lista de pendientes*/
-				freeLista(pendientes);
+				freeLista(sec->pendientes);
 			}
-			free(pendientes);
+			free(sec->pendientes);
 		}
 	}
 
